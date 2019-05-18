@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"database/sql"
 	"fmt"
 	"io"
 	"log"
@@ -12,12 +13,34 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/mattn/go-sqlite3" // sqlite3 driver
 	"github.com/spf13/cobra"
 )
 
 const (
 	todoRoot  = "/Users/adam.sanghera/.todo"
 	threshold = 7
+)
+
+var (
+	reminderTable = `
+CREATE TABLE reminder (
+  created  DATE,
+  content  TEXT,
+  appear   DATE,
+  order    NUMERIC,
+
+  PRIMARY KEY (created, order)
+);`
+
+	memoryTable = `
+CREATE TABLE ongoing (
+  created    DATE,
+  disappear  DATE,
+  content    TEXT,
+
+  PRIMARY KEY (created, order)
+);`
 )
 
 type ongoing struct {
@@ -162,6 +185,36 @@ func collectMemoriesThreshold() (string, error) {
 		}
 	}
 	return memories, nil
+}
+
+func collectMemoriesSQL() (string, error) {
+	// TODO(adam): abstract db conn out of this function
+	db, err := sql.Open("sqlite3", "memories.db")
+	if err != nil {
+		return "", err
+	}
+
+	rows, err := db.Query(`
+		SELECT content, created
+		FROM memory
+		WHERE disappear > date('now')
+		ORDER BY created DESC`)
+	if err != nil {
+		return "", err
+	}
+
+	for rows.Next() {
+		var (
+			memContent string
+			memCreated time.Time
+		)
+		err = rows.Scan(&memContent, &memCreated)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return "", nil
 }
 
 // RootCmd is the entrypoint
